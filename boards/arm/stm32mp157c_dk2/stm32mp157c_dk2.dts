@@ -22,8 +22,8 @@
 		 * zephyr,console = &usart3;
 		 * zephyr,shell-uart = &usart3;
 		 */
-		zephyr,flash = &mcusramcode;
-		zephyr,sram = &mcusramdata;
+		zephyr,flash = &mcusramcode1;
+		zephyr,sram = &mcusramdata1;
 	};
 
 	leds {
