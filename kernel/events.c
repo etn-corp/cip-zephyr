@@ -84,22 +84,24 @@ static bool are_wait_conditions_met(uint32_t desired, uint32_t current,
 	return match != 0;
 }
 
-static void k_event_post_internal(struct k_event *event, uint32_t events,
-				  bool accumulate)
+static uint32_t k_event_post_internal(struct k_event *event, uint32_t events,
+				  uint32_t events_mask)
 {
 	k_spinlock_key_t  key;
 	struct k_thread  *thread;
 	unsigned int      wait_condition;
 	struct k_thread  *head = NULL;
+	uint32_t previous_events;
 
 	key = k_spin_lock(&event->lock);
 
 	SYS_PORT_TRACING_OBJ_FUNC_ENTER(k_event, post, event, events,
-					accumulate);
+					events_mask);
 
-	if (accumulate) {
-		events |= event->events;
-	}
+	previous_events = event->events & events_mask;
+
+	events = (event->events & ~events_mask) |
+		 (events & events_mask);
 
 	event->events = events;
 
@@ -113,22 +115,17 @@ static void k_event_post_internal(struct k_event *event, uint32_t events,
 	 * 2. Unpend each of the threads in the linked list
 	 * 3. Ready each of the threads in the linked list
 	 */
-
 	_WAIT_Q_FOR_EACH(&event->wait_q, thread) {
 		wait_condition = thread->event_options & K_EVENT_WAIT_MASK;
-
 		if (are_wait_conditions_met(thread->events, events,
 					    wait_condition)) {
 			/*
 			 * The wait conditions have been satisfied. Add this
 			 * thread to the list of threads to unpend.
 			 */
-
 			thread->next_event_link = head;
 			head = thread;
 		}
-
-
 	}
 
 	if (head != NULL) {
@@ -145,35 +142,65 @@ static void k_event_post_internal(struct k_event *event, uint32_t events,
 	z_reschedule(&event->lock, key);
 
 	SYS_PORT_TRACING_OBJ_FUNC_EXIT(k_event, post, event, events,
-				       accumulate);
+				       events_mask);
+
+	return previous_events;
 }
 
-void z_impl_k_event_post(struct k_event *event, uint32_t events)
+uint32_t z_impl_k_event_post(struct k_event *event, uint32_t events)
 {
-	k_event_post_internal(event, events, true);
+	return k_event_post_internal(event, events, events);
 }
 
 #ifdef CONFIG_USERSPACE
-void z_vrfy_k_event_post(struct k_event *event, uint32_t events)
+uint32_t z_vrfy_k_event_post(struct k_event *event, uint32_t events)
 {
 	Z_OOPS(Z_SYSCALL_OBJ(event, K_OBJ_EVENT));
-	z_impl_k_event_post(event, events);
+	return z_impl_k_event_post(event, events);
 }
 #include <syscalls/k_event_post_mrsh.c>
 #endif
 
-void z_impl_k_event_set(struct k_event *event, uint32_t events)
+uint32_t z_impl_k_event_set(struct k_event *event, uint32_t events)
 {
-	k_event_post_internal(event, events, false);
+	return k_event_post_internal(event, events, ~0);
 }
 
 #ifdef CONFIG_USERSPACE
-void z_vrfy_k_event_set(struct k_event *event, uint32_t events)
+uint32_t z_vrfy_k_event_set(struct k_event *event, uint32_t events)
 {
 	Z_OOPS(Z_SYSCALL_OBJ(event, K_OBJ_EVENT));
-	z_impl_k_event_set(event, events);
+	return z_impl_k_event_set(event, events);
 }
 #include <syscalls/k_event_set_mrsh.c>
+#endif
+
+uint32_t z_impl_k_event_set_masked(struct k_event *event, uint32_t events,
+			       uint32_t events_mask)
+{
+	return k_event_post_internal(event, events, events_mask);
+}
+#ifdef CONFIG_USERSPACE
+uint32_t z_vrfy_k_event_set_masked(struct k_event *event, uint32_t events,
+			       uint32_t events_mask)
+{
+	Z_OOPS(Z_SYSCALL_OBJ(event, K_OBJ_EVENT));
+	return z_impl_k_event_set_masked(event, events, events_mask);
+}
+#include <syscalls/k_event_set_masked_mrsh.c>
+#endif
+
+uint32_t z_impl_k_event_clear(struct k_event *event, uint32_t events)
+{
+	return k_event_post_internal(event, 0, events);
+}
+#ifdef CONFIG_USERSPACE
+uint32_t z_vrfy_k_event_clear(struct k_event *event, uint32_t events)
+{
+	Z_OOPS(Z_SYSCALL_OBJ(event, K_OBJ_EVENT));
+	return z_impl_k_event_clear(event, events);
+}
+#include <syscalls/k_event_clear_mrsh.c>
 #endif
 
 static uint32_t k_event_wait_internal(struct k_event *event, uint32_t events,
