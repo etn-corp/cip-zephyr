@@ -1,9 +1,12 @@
 
-### 📁 Archived Notice
+Archived Notice
+*************** 
 
-> **This repository has been archived as of 21st July 2025.**  
-> It is no longer under active development or maintenance.  
-> Please use the code at your own discretion.
+**This repository has been archived as of 21st July 2025.**  
+It is no longer under active development or maintenance.  
+Please use the code at your own discretion.
+
+*************** 
 
 
 .. raw:: html
